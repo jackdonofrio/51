@@ -1,0 +1,316 @@
+
+.pos 0
+Init:
+    irmovl Stack, %ebp
+    irmovl Stack, %esp
+    
+main:
+    call checkIfBCD
+    
+    # Now that we've called BCD, we jump based on whether
+    # 0 flag was triggered (meaning we got an error)
+    je exit
+    
+    # Now check that it divides by 2 - this is simple
+    call checkTwo
+    # if 0 flag was triggered, it is divisible by 2, we then check 3
+    # if not triggered, we exit - it's not divisible by 6
+    jne exit
+    
+    call checkThree
+    
+    exit:
+        halt
+    
+    
+checkIfBCD:
+   # checks if input is BCD
+   # Triggers ZF if non BCD
+   
+   # push registers
+   pushl %ebx
+   pushl %eax
+   pushl %ecx
+   pushl %edx
+   
+   # move value of input in memory -> %eax
+   irmovl input, %eax
+   mrmovl (%eax), %eax
+   
+   # for each digit, check if it digit - 9 triggers SF - if so, it's not BCD
+   # extract msb into edx
+   irmovl $0xff000000, %edx
+   andl %eax, %edx
+   irmovl $0x09000000, %ebx
+   # is it > 9 ?
+   subl %edx, %ebx
+   jl notBCD
+   
+   # remove msb from eax (where we copied input)
+   irmovl $0x00ffffff, %ecx
+   andl %ecx, %eax
+   
+   # extract second most sig byte into edx
+   irmovl $0x00ff0000, %edx
+   andl %eax, %edx
+   irmovl $0x00090000, %ebx
+   subl %edx, %ebx
+   jl notBCD
+   
+   # remove 2nd msb from eax
+   irmovl $0x0000ffff, %ecx
+   andl %ecx, %eax
+   
+   # extract second least sig byte into edx
+   irmovl $0x0000ff00, %edx
+   andl %eax, %edx
+   irmovl $0x00000900, %ebx
+   subl %edx, %ebx
+   jl notBCD
+   
+   # remove 2nd lsb from eax
+   irmovl $0x000000ff, %ecx
+   andl %ecx, %eax
+   
+   # extract lsb into edx
+   irmovl $0x000000ff, %edx
+   andl %eax, %edx
+   irmovl $0x00000009, %ebx
+   subl %edx, %ebx
+   jl notBCD
+   
+   jmp isBCD
+
+   notBCD:
+    # we have to make output 0xE
+    irmovl output, %eax
+    irmovl $0xE, %ebx
+    rmmovl %ebx, (%eax)
+    # trigger zero flag for caller's use
+    subl %ebx, %ebx
+   isBCD:
+    nop
+    
+   # pop back registers (in reverse order)
+   popl %edx
+   popl %ecx
+   popl %eax
+   popl %ebx
+   ret
+ 
+ 
+checkTwo:
+    # checks if input is divisible by 2
+    # if ZF gets triggered, input is even
+    pushl %ebx
+    pushl %eax
+    
+    irmovl $0x1, %eax
+    irmovl input, %ebx
+    mrmovl (%ebx), %ebx
+    andl %eax, %ebx # Later, check if this is 0 if so, input is even
+    
+    popl %eax
+    popl %ebx
+    ret
+ 
+checkThree:
+    # checks if input is divisible by 3
+    pushl %eax
+    pushl %ebx
+    pushl %ecx
+    pushl %edx
+    # here, we know it's in BCD - program would exit before
+    # this would get called if it's not BCD
+    # My plan: shift each into msb in registers, then do addition
+    # of digits there, following classic algorithm
+    
+    # extract all bytes into their own registers
+    # so we can shift second MSB into MSB, add them
+    # and shift LSB into second LSB, add them
+    # put the sums into BCD, repeat addition
+    
+    # save input value in %ecx
+    irmovl input, %ecx
+    mrmovl (%ecx), %ecx
+    
+    # extract msb
+    irmovl 0xff000000, %ebx
+    andl %ecx, %ebx # MSB digit now in ebx
+    
+    # second most sig byte 
+    irmovl 0x00ff0000, %eax
+    andl %ecx, %eax # Next digit now in eax
+    # now shift eax one byte to the left, so we can add it to MSB digit
+    call leftShiftOneNibble
+    call leftShiftOneNibble
+    addl %eax, %ebx
+    
+    # second least sig byte (store in edx)
+    irmovl $0x0000ff00, %edx
+    andl %ecx, %edx
+    
+    # LSB
+    irmovl $0x000000ff, %eax
+    andl %ecx, %eax
+    # shift LSB to 2nd LSB, add them
+    call leftShiftOneNibble
+    call leftShiftOneNibble
+    addl %eax, %edx # result of shifted least sig byte + 2nd LSB
+
+    # now we need to put those two sums in BCD
+    
+    # what we can do is check if the number is over 9
+    # if so, we add 6 (0110) to msb so that the right nibble will
+    # contain the correct digit, and then andl out the left nibble.
+    # We then add 1 (for the carry) to the right nibble. This 1 won't
+    # cause carry or anything because the right nibble will be at most 8
+    # (for 9 + 9, remember it won't be nine because 9 + 0 is valid bcd and
+    # won't be "fixed" if found)
+    
+    # remember - msb sum's in ebx, 2nd lsb sum's in edx
+    
+    # is msb sum > 9 ?
+    irmovl $0x09000000, %eax
+    subl %ebx, %eax
+    jl fixBCDSum_msb
+    jmp checkSecondLSBSum # if we don't need to fix msb sum, move on to 2nd lsb
+    
+    
+    fixBCDSum_msb:
+        # what's happening here is described above in detail
+        irmovl $0x06000000, %eax
+        addl %eax, %ebx
+        irmovl $0x0f000000, %eax 
+        andl %eax, %ebx  # get rid of left nibble contents
+        irmovl $0x01000000, %eax
+        addl %eax, %ebx # add 1 to msb sum (for carry)
+    
+    checkSecondLSBSum: # just so we can jump past fixBCDSum_msb
+        # is second to last sig byte sum > 9 ?
+        irmovl $0x00000900, %eax
+        subl %edx, %eax
+        jl fixBCDSum_secondLSB
+        jmp add_sums
+        
+    fixBCDSum_secondLSB:
+        irmovl $0x00000600, %eax
+        addl %eax, %edx
+        irmovl $0x00000f00, %eax
+        andl %eax, %edx # get rid of left nibble contents
+        irmovl $0x00000100, %eax
+        addl %eax, %edx
+        
+    add_sums: # (to jump past fix 2nd lsb)
+        # now we must add the two BCD sums
+        
+        # first, shift the sum in 2nd least sig bit into MSB
+        # It needs to move 2 bytes left, so 4 nibble shifts
+        rrmovl %edx, %eax
+        call leftShiftOneNibble
+        call leftShiftOneNibble
+        call leftShiftOneNibble
+        call leftShiftOneNibble
+        
+        rrmovl %eax, %edx
+        addl %edx, %ebx
+        
+        # now check that it's BCD
+        irmovl $0x09000000, %eax
+        subl %ebx, %eax
+        jl fixFinalSum
+        jmp checkThreeMultiple
+        
+    fixFinalSum:
+        # exactly same as fixing msb sum - make subroutine if have time
+        irmovl $0x06000000, %eax
+        addl %eax, %ebx
+        irmovl $0x0f000000, %eax 
+        andl %eax, %ebx  # get rid of left nibble contents
+        irmovl $0x01000000, %eax
+        addl %eax, %ebx # add 1 to msb sum (for carry)
+    
+    checkThreeMultiple:
+        # now that we've got the result in a single BCD digit,
+        # we can check if it's 0,3,6, or 9
+        
+        # if it's zero... it's a multiple of 3
+        addl %ebx, %ebx
+        je isThreeMultiple
+        
+        # if it's three... it's a multiple of 3
+        irmovl $0x03000000, %eax
+        subl %ebx, %eax
+        je isThreeMultiple
+        
+        # if it's six... it's a multiple of 3
+        irmovl $0x06000000, %eax
+        subl %ebx, %eax
+        je isThreeMultiple
+        
+        # if it's nine... it's a multiple of 3
+        irmovl $0x09000000, %eax
+        subl %ebx, %eax
+        je isThreeMultiple
+        
+        jmp notThreeMultiple
+    
+    
+    
+    isThreeMultiple:
+        # write one to output
+        # this subroutine does not even get called if 
+        # the num's not divisible by 2. So at this point
+        # we know it's gotta be divisible by 6 and can just
+        # write 0x01 to output
+        irmovl $0x1, %eax
+        irmovl output, %ebx
+        rmmovl %eax, (%ebx)
+
+    notThreeMultiple:
+        nop
+        
+    popl %edx
+    popl %ecx
+    popl %ebx
+    popl %eax
+    
+    ret
+ 
+
+leftShiftOneNibble:
+    # shifts eax to the left by one nibble
+    # WARNING: overwrites whatever is in eax currently!
+    # (This should be called only within another subroutine,
+    #  so that the original value of %eax before will be restored)
+    
+    # in order to do this, we need to multiply by 16
+    # Shift left one bit => multiple by 2
+    # Shift left one nibble => multiply by 2, 4 times = 2^4 = mult by 16
+    # add value 16 times
+
+    addl %eax, %eax # = 2eax
+    addl %eax, %eax # = 4eax
+    addl %eax, %eax # = 8eax
+    addl %eax, %eax # = 16eax -> shifted one nibble
+    ret
+   
+
+# i moved these up to the 400's so that they wouldn't touch
+# program memory
+.defl Stack 0x400
+
+.pos 0x450
+    input:    # asking about the decimal number (7734)
+    	.byte 0x04
+    	.byte 0x03
+        .byte 0x07
+        .byte 0x07
+    	
+.pos 0x480
+    output:
+        .byte 0x00
+    	.byte 0x00
+        .byte 0x00
+        .byte 0x00
+        

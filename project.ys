@@ -1,0 +1,30 @@
+
+.pos 0
+Init:
+    irmovl Stack, %ebp
+    irmovl Stack, %esp
+    call LSBify
+    halt
+
+LSBify:
+   # we overwrite eax, but we'll save and give back ebx
+   pushl %ebx
+   irmovl target, %eax
+   mrmovl (%eax), %eax
+   irmovl $0xff, %ebx
+   
+   andl %ebx, %eax
+   
+   # pop back whatever might've been in ebx
+   popl %ebx
+   ret
+ 
+
+.defl Stack 0x100
+    
+
+.pos 0x150
+target:
+    .long 0xdeadbeef
+    
+    
