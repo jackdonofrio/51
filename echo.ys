@@ -1,3 +1,4 @@
+# sws, cs51
 
 # addresses of the I/O devices
 .defl KBSR 0x00fffe00
@@ -18,6 +19,7 @@ echo:
 # subroutine: get a char into %eax
 GETC:
 		pushl %ebx  # since we stomp on that
+		pushl %edx
 	
 		# read KBSR until it's 1
 KBNotReady:
@@ -28,12 +30,15 @@ KBNotReady:
 		# got a character---get it into %ecx
 		mrmovl  KBDR, %eax
 		# Here, to flip the case:
+		# just flip the bit for 32 - this will either add 32 if uppercase
+		# making it lowercase, or subtract 32 if lowercase, making it uppercase
 		
-		# if >= 97, subtract 32 to get to upper case
-		# if < 97, add 32 to get to lower case
-		# TODO - IMPLEMENT ABOVE FUNCTIONALITY
-		
+		# we can do this with an xor I believe
+		# it would mean to xor it with all 0's except the 32 spot
+		irmovl $0x20, %edx # this is 32
+		xorl %edx, %eax
 	
+	    popl %edx
 		popl %ebx
 		ret
 		
