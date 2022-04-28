@@ -27,17 +27,42 @@ KBNotReady:
 		addl %ebx,%ebx
 		je KBNotReady # jmps if zero
 	
-		# got a character---get it into %ecx
+		# got a character---get it into %eax
 		mrmovl  KBDR, %eax
-		# Here, to flip the case:
-		# just flip the bit for 32 - this will either add 32 if uppercase
-		# making it lowercase, or subtract 32 if lowercase, making it uppercase
 		
-		# we can do this with an xor I believe
-		# it would mean to xor it with all 0's except the 32 spot
+		# check if char is less than 65 - if so, it's not a letter
+		irmovl $0x41, %edx
+		subl %eax, %edx
+		jg notletter
+		
+		# check if char is greater than 122
+		irmovl $0x7a, %edx
+		subl %eax, %edx
+		jl notletter
+		
+		# check if char is less greater than 90 and less than 97
+		
+		
+		irmovl $0x5a, %edx
+		subl %eax, %edx
+		jl over_ninety
+		jmp swap_case
+		
+		over_ninety:
+		    # we know it's over 90 - is it < 97?
+		    irmovl $0x61, %edx
+		    subl %eax, %edx
+		    jg notletter
+		
+        swap_case:
+		# xor it with all 0's except the 32 spot
 		irmovl $0x20, %edx # this is 32
 		xorl %edx, %eax
-	
+		
+		notletter:
+		
+    
+
 	    popl %edx
 		popl %ebx
 		ret
@@ -61,7 +86,6 @@ DNotReady:
 	
 
 
-.pos 0x80
+.pos 0x200
 stack: 
 .long 0xFFFFFFFF # the top of the empty stack
-
