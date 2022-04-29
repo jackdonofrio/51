@@ -1,0 +1,47 @@
+
+.pos 0
+Init:
+    irmovl Stack, %ebp
+    irmovl Stack, %esp
+    
+    irmovl $0x2, %edx # start
+    irmovl $0x2, %ebx # count
+    call rSum
+    halt
+
+
+rSum:
+    # Start: %edx
+    # Count: %ebx
+    # accumulating result in %eax
+    pushl %ecx
+    
+    irmovl $0x0, %ecx
+    subl %ebx, %ecx
+    jl recursive 
+    
+    base:
+        irmovl $0, %eax
+        popl %ecx
+        ret
+    
+    recursive:
+        # add Start to result
+        addl %edx, %eax
+        
+        # make next start + 1
+        irmovl $0x1, %ecx
+        addl %ecx, %edx
+        
+        # make next count - 1
+        subl %ecx, %ebx
+        
+        call rSum
+
+    
+    popl %ecx
+    ret
+
+ 
+.defl Stack 0x100
+    
