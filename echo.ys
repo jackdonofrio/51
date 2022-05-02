@@ -1,4 +1,5 @@
 # sws, cs51
+# modified by John Donofrio, Spring 2022
 
 # addresses of the I/O devices
 .defl KBSR 0x00fffe00
@@ -89,3 +90,4 @@ DNotReady:
 .pos 0x200
 stack: 
 .long 0xFFFFFFFF # the top of the empty stack
+
